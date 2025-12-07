@@ -62,8 +62,8 @@ module trustchain::column {
         timestamp: u64,
     }
 
-    // Create new column
-    public entry fun create_column(
+    // Create new column - returns the column object for chaining
+    public fun create_column_with_return(
         column_id: String,
         floor_level: u64,
         column_type: String,
@@ -73,9 +73,8 @@ module trustchain::column {
         max_vibration: u64,
         crack_width_threshold: u64,
         ctx: &mut TxContext
-    ) {
+    ): Column {
         let column_obj_id = object::new(ctx);
-        let column_obj_id_copy = object::uid_to_inner(&column_obj_id);
 
         let column = Column {
             id: column_obj_id,
@@ -105,10 +104,47 @@ module trustchain::column {
             owner: sender(ctx),
         });
 
+        column
+    }
+
+    // Create new column - convenience entry function
+    public entry fun create_column(
+        column_id: String,
+        floor_level: u64,
+        column_type: String,
+        material: String,
+        installation_date: u64,
+        max_tilt_degrees: u64,
+        max_vibration: u64,
+        crack_width_threshold: u64,
+        ctx: &mut TxContext
+    ) {
+        let column = create_column_with_return(
+            column_id,
+            floor_level,
+            column_type,
+            material,
+            installation_date,
+            max_tilt_degrees,
+            max_vibration,
+            crack_width_threshold,
+            ctx
+        );
+
         transfer::public_transfer(column, sender(ctx));
     }
 
-    // Attach column to building
+    // Attach column to building - takes ownership and returns
+    public fun attach_to_building_and_transfer(
+        mut column: Column,
+        building_id: ID,
+        ctx: &mut TxContext
+    ) {
+        column.building_id = std::option::some(building_id);
+        transfer::public_transfer(column, sender(ctx));
+    }
+
+    // Attach column to building - for already owned columns
     public entry fun attach_to_building(
         column: &mut Column,
         building_id: ID,

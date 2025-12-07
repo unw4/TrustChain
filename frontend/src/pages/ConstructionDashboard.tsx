@@ -132,51 +132,84 @@ export default function ConstructionDashboard() {
     );
   };
 
-  const handleCreateColumn = () => {
-    const tx = new Transaction();
+  const resetForm = () => {
+    setColumnId('');
+    setFloorLevel('');
+    setColumnType('');
+    setMaterial('');
+    setMaxTilt('');
+    setMaxVibration('');
+    setCrackThreshold('');
+    setSelectedBuildingId('');
+  };
 
-    // Create the column
-    const columnResult = tx.moveCall({
+  const handleCreateColumn = async () => {
+    // Step 1: Create the column first
+    const createTx = new Transaction();
+
+    createTx.moveCall({
       target: `${PACKAGE_ID}::column::create_column`,
       arguments: [
-        tx.pure.string(columnId),
-        tx.pure.u64(parseInt(floorLevel)),
-        tx.pure.string(columnType),
-        tx.pure.string(material),
-        tx.pure.u64(Date.now()),
-        tx.pure.u64(parseInt(maxTilt)),
-        tx.pure.u64(parseInt(maxVibration)),
-        tx.pure.u64(parseInt(crackThreshold)),
+        createTx.pure.string(columnId),
+        createTx.pure.u64(parseInt(floorLevel)),
+        createTx.pure.string(columnType),
+        createTx.pure.string(material),
+        createTx.pure.u64(Date.now()),
+        createTx.pure.u64(parseInt(maxTilt)),
+        createTx.pure.u64(parseInt(maxVibration)),
+        createTx.pure.u64(parseInt(crackThreshold)),
       ],
     });
 
-    // If a building is selected, attach the column to it
-    if (selectedBuildingId) {
-      tx.moveCall({
-        target: `${PACKAGE_ID}::column::attach_to_building`,
-        arguments: [
-          columnResult,
-          tx.pure.id(selectedBuildingId),
-        ],
-      });
-    }
-
     signAndExecute(
-      { transactionBlock: tx },
+      { transactionBlock: createTx },
       {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: ['columns', account?.address] });
-          queryClient.invalidateQueries({ queryKey: ['buildings', account?.address] });
-          setShowCreateModal(false);
-          // Reset form
-          setColumnId('');
-          setFloorLevel('');
-          setColumnType('');
-          setMaterial('');
-          setMaxTilt('');
-          setMaxVibration('');
-          setCrackThreshold('');
-          setSelectedBuildingId('');
+        onSuccess: async (result) => {
+          // Find the created column object ID
+          const createdColumn = result.effects?.created?.find(
+            (obj) => obj.owner && typeof obj.owner === 'object' && 'AddressOwner' in obj.owner
+          );
+
+          // Step 2: If building is selected, attach column to it
+          if (selectedBuildingId && createdColumn) {
+            const attachTx = new Transaction();
+
+            attachTx.moveCall({
+              target: `${PACKAGE_ID}::column::attach_to_building`,
+              arguments: [
+                attachTx.object(createdColumn.reference.objectId),
+                attachTx.pure.id(selectedBuildingId),
+              ],
+            });
+
+            signAndExecute(
+              { transactionBlock: attachTx },
+              {
+                onSuccess: () => {
+                  queryClient.invalidateQueries({ queryKey: ['columns', account?.address] });
+                  queryClient.invalidateQueries({ queryKey: ['buildings', account?.address] });
+                  setShowCreateModal(false);
+                  resetForm();
+                },
+                onError: (error) => {
+                  console.error('Failed to attach column to building:', error);
+                  // Column is created but not attached
+                  queryClient.invalidateQueries({ queryKey: ['columns', account?.address] });
+                  setShowCreateModal(false);
+                  resetForm();
+                },
+              }
+            );
+          } else {
+            // No building selected, just refresh
+            queryClient.invalidateQueries({ queryKey: ['columns', account?.address] });
+            queryClient.invalidateQueries({ queryKey: ['buildings', account?.address] });
+            setShowCreateModal(false);
+            resetForm();
+          }
+        },
+        onError: (error) => {
+          console.error('Failed to create column:', error);
         },
       }
     );
