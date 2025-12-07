@@ -1,0 +1,11 @@
+[package]
+name = "trustchain"
+version = "0.1.0"
+edition = "2024.beta"
+published-at = "0xae561db79856917337de3cc4029d837ea8aedb61c1fd1f424e9644d398f47cd9"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/devnet" }
+
+[addresses]
+trustchain = "0x0"
